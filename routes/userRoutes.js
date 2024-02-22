@@ -4,6 +4,8 @@ const userController = require("../controllers/userController");
 const authController = require("../controllers/authController");
 
 router.route("/").get(userController.findAllUsers);
+router.route("/premium").get(userController.findPremiumUsers);
+router.route("/:id").delete(userController.deleteUser);
 
 //router.route("/:id").get(authController.findByPk);
 

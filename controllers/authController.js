@@ -53,7 +53,7 @@ exports.login = async (req, res) => {
         data: user.id,
       },
       privateKey,
-      { expiresIn: "1h" }
+      { expiresIn: "24h" }
     );
 
     const msg = `L'utilisateur a été connecté avec succès en tant que ${user.type_utilisateur}.`;
@@ -65,60 +65,71 @@ exports.login = async (req, res) => {
   }
 };
 
-exports.signup = (req, res) => {
-  bcrypt
-    .hash(req.body.mot_de_passe, 10)
-    .then((hash) => {
-      // Création de l'utilisateur
-      return User.create({
-        email: req.body.email,
-        mot_de_passe: hash,
-        type_utilisateur: req.body.type_utilisateur,
-      }).then((userCreated) => {
-        const message = `L'utilisateur ${userCreated.email} a bien été créé`;
-        userCreated.mot_de_passe = "hidden";
-
-        // Récupération de l'ID de l'utilisateur créé
-        const utilisateur_id = userCreated.id;
-
-        // Vérifier le type d'utilisateur et créer le profil correspondant
-        if (req.body.type_utilisateur === "joueur") {
-          return ProfilJoueur.create({
-            utilisateur_id: utilisateur_id,
-            email: req.body.email,
-            mot_de_passe: hash,
-          }).then((playerCreated) => {
-            return res.json({
-              message,
-              data: { userCreated, playerCreated },
-            });
-          });
-        } else if (req.body.type_utilisateur === "club") {
-          return ProfilClub.create({
-            utilisateur_id: utilisateur_id,
-            nom_profil: req.body.nom_profil,
-            email: req.body.email,
-          }).then((clubCreated) => {
-            const message = `Le club ${clubCreated.email} a bien été créé`;
-            clubCreated.mot_de_passe = "hidden";
-            return res.json({
-              message,
-              data: { userCreated, clubCreated },
-            });
-          });
-        }
-      });
-    })
-    .catch((error) => {
-      if (
-        error instanceof UniqueConstraintError ||
-        error instanceof ValidationError
-      ) {
-        return res.status(400).json({ message: error.message, data: error });
-      }
-      const message = "Un problème est survenu lors de la création du profil";
-      return res.status(500).json({ message, data: error });
+exports.signup = async (req, res) => {
+  try {
+    // Vérifier si l'utilisateur avec cette adresse e-mail existe déjà
+    const existingUser = await User.findOne({
+      where: { email: req.body.email },
     });
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "Cette adresse e-mail est déjà associée à un compte.",
+      });
+    }
+
+    // Hacher le mot de passe
+    const hashedPassword = await bcrypt.hash(req.body.mot_de_passe, 10);
+
+    // Création de l'utilisateur
+    const userCreated = await User.create({
+      email: req.body.email,
+      mot_de_passe: hashedPassword,
+      type_utilisateur: req.body.type_utilisateur,
+    });
+
+    const message = `L'utilisateur ${userCreated.email} a bien été créé`;
+    userCreated.mot_de_passe = "hidden";
+
+    // Récupération de l'ID de l'utilisateur créé
+    const utilisateur_id = userCreated.id;
+
+    // Vérifier le type d'utilisateur et créer le profil correspondant
+    if (req.body.type_utilisateur === "joueur") {
+      const playerCreated = await ProfilJoueur.create({
+        utilisateur_id: utilisateur_id,
+        email: req.body.email,
+        mot_de_passe: hashedPassword,
+      });
+
+      return res.json({
+        message,
+        data: { userCreated, playerCreated },
+      });
+    } else if (req.body.type_utilisateur === "club") {
+      const clubCreated = await ProfilClub.create({
+        utilisateur_id: utilisateur_id,
+        nom_profil: req.body.nom_profil,
+        email: req.body.email,
+      });
+
+      const message = `Le club ${clubCreated.email} a bien été créé`;
+      clubCreated.mot_de_passe = "hidden";
+
+      return res.json({
+        message,
+        data: { userCreated, clubCreated },
+      });
+    }
+  } catch (error) {
+    if (error.name === "SequelizeValidationError") {
+      // Gérer d'autres erreurs de validation Sequelize
+      return res.status(400).json({ message: error.message, data: error });
+    }
+
+    const message = "Un problème est survenu lors de la création du profil";
+    return res.status(500).json({ message, data: error });
+  }
 };
 
 exports.protect = (req, res, next) => {
@@ -139,36 +150,4 @@ exports.protect = (req, res, next) => {
   }
 
   return next();
-};
-
-exports.restrictTo = (...roles) => {
-  return (req, res, next) => {
-    // Utilisez ProfilJoueur
-    ProfilJoueur.findByPk(req.userId)
-      .then((user) => {
-        if (!user || !roles.every((role) => user.roles.includes(role))) {
-          const message = "Droits insuffisants";
-          return res.status(403).json({ message });
-        }
-        return next();
-      })
-      .catch((err) => {
-        const message = "Erreur lors de l'autorisation";
-        res.status(500).json({ message, data: err });
-      });
-
-    // Utilisez ProfilClub
-    ProfilClub.findByPk(req.userId)
-      .then((club) => {
-        if (!club || !roles.every((role) => club.roles.includes(role))) {
-          const message = "Droits insuffisants";
-          return res.status(403).json({ message });
-        }
-        return next();
-      })
-      .catch((err) => {
-        const message = "Erreur lors de l'autorisation";
-        res.status(500).json({ message, data: err });
-      });
-  };
 };

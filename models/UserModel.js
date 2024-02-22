@@ -23,6 +23,10 @@ module.exports = (sequelize) => {
         type: DataTypes.ENUM("joueur", "club", "admin"),
         allowNull: false,
       },
+      premium: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
     },
     {
       tableName: "utilisateurs",

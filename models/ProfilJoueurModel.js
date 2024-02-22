@@ -39,6 +39,7 @@ module.exports = (sequelize) => {
   // Association avec la table utilisateurs
   ProfilJoueur.belongsTo(sequelize.models.User, {
     foreignKey: "utilisateur_id",
+    onDelete: "CASCADE",
   });
 
   return ProfilJoueur;

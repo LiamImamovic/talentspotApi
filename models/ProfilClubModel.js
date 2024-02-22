@@ -29,6 +29,7 @@ module.exports = (sequelize) => {
   // Association avec la table utilisateurs
   ProfilClub.belongsTo(sequelize.models.User, {
     foreignKey: "utilisateur_id",
+    onDelete: "CASCADE",
   });
 
   return ProfilClub;
